@@ -1,0 +1,161 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earth Jukebox</title>
+  <meta name="description" content="Fly around the Earth by voice or keyboard and listen to Earth data. NASA Space Apps 2026.">
+  <link rel="stylesheet" href="styles.css">
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "./vendor/three/three.module.js",
+        "three/addons/": "./vendor/three/addons/"
+      }
+    }
+  </script>
+</head>
+<body>
+  <a class="skip-link" href="#command-input">Skip to the command box</a>
+
+  <!-- Screen-reader announcements. Visually hidden; the visible log below is not live, so nothing is read twice. -->
+  <div id="live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
+  <div id="live-assertive" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true"></div>
+
+  <main class="app">
+    <section id="globe" class="globe" tabindex="0" role="application"
+             aria-roledescription="interactive globe"
+             aria-label="Earth globe. Arrow keys move, plus and minus zoom, D describes this spot, V turns voice control on or off, H lists all commands.">
+      <div class="reticle" aria-hidden="true"></div>
+      <div id="marker-label" class="marker-label" aria-hidden="true" hidden></div>
+      <nav id="data-chips" class="data-chips" aria-label="Data stories here" hidden>
+        <p class="chips-label" id="chips-label">Data here</p>
+        <ul id="chips-list" aria-labelledby="chips-label"></ul>
+      </nav>
+      <div id="caption" class="caption" aria-hidden="true"></div>
+      <div id="loading" class="loading" aria-hidden="true">Loading Earth…</div>
+    </section>
+
+    <aside class="panel" aria-label="Earth Jukebox controls">
+      <header class="panel-head">
+        <h1>Earth Jukebox</h1>
+        <p class="tag">Listen to the planet. Fly with your voice.</p>
+      </header>
+
+      <section class="voice" aria-labelledby="voice-h">
+        <h2 id="voice-h" class="visually-hidden">Voice control</h2>
+        <button id="mic" class="mic" type="button" aria-pressed="false" aria-describedby="mic-hint">
+          <span class="mic-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path fill="currentColor" d="M12 15a3 3 0 0 0 3-3V6a3 3 0 1 0-6 0v6a3 3 0 0 0 3 3Zm5-3a1 1 0 1 1 2 0 7 7 0 0 1-6 6.93V21h3a1 1 0 1 1 0 2H8a1 1 0 1 1 0-2h3v-2.07A7 7 0 0 1 5 12a1 1 0 1 1 2 0 5 5 0 0 0 10 0Z"/></svg>
+          </span>
+          <span id="mic-label" class="mic-label">Start voice control</span>
+        </button>
+        <p id="mic-hint" class="hint">Press <kbd>V</kbd> anytime. Try “take me to the Amazon”.</p>
+        <p id="interim" class="interim" aria-hidden="true"></p>
+
+        <form id="command-form" class="command-form" autocomplete="off">
+          <label for="command-input">Type a command</label>
+          <div class="row">
+            <input id="command-input" type="text" placeholder="go to Greenland" enterkeyhint="go" spellcheck="false">
+            <button type="submit">Go</button>
+          </div>
+        </form>
+      </section>
+
+      <section class="location" aria-labelledby="loc-h">
+        <h2 id="loc-h">You are over</h2>
+        <p id="loc-name" class="loc-name">Earth</p>
+        <p id="loc-coords" class="loc-coords">—</p>
+        <p id="loc-blurb" class="loc-blurb"></p>
+      </section>
+
+      <section class="sound" aria-labelledby="sound-h">
+        <h2 id="sound-h">Sound</h2>
+        <div class="row">
+          <button id="play" type="button" aria-pressed="false">Listen here</button>
+          <label class="inline" for="layer">Data</label>
+          <select id="layer"></select>
+        </div>
+        <p id="layer-desc" class="hint"></p>
+        <div class="row">
+          <label for="volume">Volume</label>
+          <input id="volume" type="range" min="0" max="100" value="70">
+        </div>
+      </section>
+
+      <section class="haptics" aria-labelledby="hap-h">
+        <h2 id="hap-h">Touch (haptics)</h2>
+        <div class="meter" aria-hidden="true"><div id="hap-bar" class="meter-bar"></div></div>
+        <p id="hap-status" class="hint">Vibrates on supported phones. A wearable add-on comes in phase 3.</p>
+        <button id="hap-connect" type="button" hidden>Connect haptic device</button>
+      </section>
+
+      <section class="settings" aria-labelledby="set-h">
+        <h2 id="set-h">Settings</h2>
+        <label class="check"><input id="opt-speak" type="checkbox" checked> Spoken responses <span class="hint">(turn off if you use a screen reader)</span></label>
+        <label class="check"><input id="opt-clouds" type="checkbox" checked> Clouds</label>
+        <label class="check"><input id="opt-spin" type="checkbox"> Slow spin</label>
+      </section>
+
+      <details id="help" class="help">
+        <summary>What can I say?</summary>
+        <div id="help-body"></div>
+      </details>
+
+      <section class="log-wrap" aria-labelledby="log-h">
+        <h2 id="log-h">Conversation</h2>
+        <ol id="log" class="log"></ol>
+      </section>
+    </aside>
+  </main>
+
+  <dialog id="data-dialog" class="data-dialog" aria-labelledby="dd-title" aria-describedby="dd-subtitle">
+    <div class="dd-inner">
+      <header class="dd-head">
+        <div>
+          <h2 id="dd-title">Data</h2>
+          <p id="dd-subtitle" class="hint"></p>
+        </div>
+        <button id="dd-close" type="button" class="dd-close" aria-label="Close data view">✕</button>
+      </header>
+      <div class="dd-body">
+        <div class="dd-media">
+          <div id="dd-stage" class="dd-stage"></div>
+          <p id="dd-source" class="hint dd-source"></p>
+        </div>
+        <div class="dd-side">
+          <div class="row">
+            <button id="dd-play" type="button" aria-pressed="false">Play sound</button>
+            <button id="dd-describe" type="button">Describe</button>
+          </div>
+          <div id="dd-views-wrap" class="row">
+            <label for="dd-views" class="inline">View</label>
+            <select id="dd-views"></select>
+          </div>
+          <label id="dd-narration-wrap" class="check" hidden><input id="dd-narration" type="checkbox"> NASA narration audio</label>
+          <section aria-labelledby="dd-hear-h">
+            <h3 id="dd-hear-h">What you're hearing</h3>
+            <div id="dd-meters" class="dd-meters" aria-hidden="true"></div>
+            <p id="dd-now" class="dd-now" role="status" aria-live="polite"></p>
+          </section>
+          <section id="dd-here-wrap" aria-labelledby="dd-here-h">
+            <h3 id="dd-here-h">Where you are</h3>
+            <p id="dd-here"></p>
+          </section>
+          <section aria-labelledby="dd-desc-h">
+            <h3 id="dd-desc-h">What it shows</h3>
+            <p id="dd-desc"></p>
+          </section>
+          <section aria-labelledby="dd-map-h">
+            <h3 id="dd-map-h">How it sounds</h3>
+            <p id="dd-mapping"></p>
+          </section>
+          <p id="dd-credit" class="hint"></p>
+        </div>
+      </div>
+    </div>
+  </dialog>
+
+  <script type="module" src="src/main.js"></script>
+</body>
+</html>
