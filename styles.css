@@ -165,3 +165,23 @@ select { flex: 1; min-width: 0; }
   .chips-label { display: none; }
 }
 .dd-fail { position: absolute; inset: 0; display: grid; place-items: center; padding: 24px; margin: 0; text-align: center; color: var(--muted); background: #050a14; }
+
+/* Intro */
+.intro-welcome { border: none; padding: 0; background: transparent; color: var(--text); max-width: min(640px, calc(100vw - 32px)); }
+.intro-welcome::backdrop { background: radial-gradient(ellipse at center, rgba(4, 10, 30, .55), rgba(0, 2, 8, .92)); }
+.iw-inner { text-align: center; padding: 36px 28px; border-radius: 22px; background: rgba(8, 15, 32, .88); border: 1px solid var(--line); }
+.iw-kicker { margin: 0; font-size: 12px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+.intro-welcome h2 { margin: 10px 0 8px; font-size: clamp(28px, 6vw, 42px); color: var(--text); text-transform: none; letter-spacing: 0; }
+#intro-welcome-sub { margin: 0 auto 22px; max-width: 46ch; line-height: 1.5; color: #cdd8ec; }
+.iw-actions { display: flex; flex-direction: column; gap: 10px; align-items: center; }
+.iw-begin { min-height: 60px; padding: 0 30px; font-size: 19px; font-weight: 700; border-radius: 999px; background: var(--accent); color: var(--accent-ink); border: none; }
+.iw-skip { background: transparent; border-color: transparent; color: var(--muted); text-decoration: underline; }
+.intro-bar { position: fixed; z-index: 30; top: 14px; left: 14px; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 14px; border-radius: 999px; background: rgba(4, 7, 15, .85); border: 1px solid var(--line); }
+.intro-step { font-size: 13px; color: var(--muted); white-space: nowrap; }
+.intro-track { width: 120px; height: 6px; border-radius: 999px; background: #14213b; overflow: hidden; }
+.intro-progress { height: 100%; width: 0; background: linear-gradient(90deg, var(--accent), var(--warm)); transition: width .6s; }
+.intro-bar button { min-height: 38px; border-radius: 999px; }
+.intro-again { width: 100%; }
+body.intro-on .data-chips, body.intro-on .reticle, body.intro-on .marker-label { display: none; }
+body.intro-on .caption { font-size: 20px; max-width: min(760px, 92%); }
+@media (max-width: 820px) { .intro-track { display: none; } .intro-bar { top: 8px; left: 8px; } }

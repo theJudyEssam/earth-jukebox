@@ -14,7 +14,7 @@ class AutoRange {
   }
 }
 
-class Base {
+export class Base {
   constructor(engine) {
     this.e = engine; this.ctx = engine.ctx; this.haptics = engine.haptics;
     this.out = this.ctx.createGain(); this.out.gain.value = 0;

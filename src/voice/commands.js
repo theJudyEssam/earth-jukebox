@@ -20,6 +20,10 @@ export function parse(input) {
   if (!t) return null;
 
   if (is(t, /^(help|what can i (say|do|ask)|commands|list commands|options|how does this work)\b/)) return { type: 'help' };
+  // ---- intro
+  if (is(t, /^(skip|skip (it|this|the intro|intro|introduction)|stop (the )?intro)$/)) return { type: 'skip-intro' };
+  if (is(t, /^((play|start|replay|hear|watch)( the)? )?(intro|introduction|welcome)( again)?$/)) return { type: 'intro' };
+
   // ---- data pop-up
   if (is(t, /^(close|close (it|this|that|the (data|pop ?up|window|panel|dialog))|exit|done|back to (the )?(globe|earth|map)|go back to (the )?(globe|earth))$/)) return { type: 'close-data' };
   if (is(t, /^((what|which) (data|datasets?|data stories|options)( is| are)? (here|available)|(show|list|read)( me)? (the )?(data|options|data options|datasets)|options|data|what can i (hear|listen to)( here)?)$/)) return { type: 'list-data' };
@@ -172,6 +176,10 @@ export const HELP = [
     ['“Pause” / “Play” / “Describe”', 'Control the open pop-up'],
     ['“Close”', 'Back to the globe'],
   ] },
+  { group: 'Intro', items: [
+    ['“Play the intro”', 'Hear the one-minute journey around Earth'],
+    ['“Skip”', 'Leave the intro and go to the globe'],
+  ] },
   { group: 'Ask', items: [
     ['“Where am I?”', 'Describe the spot under the crosshair'],
     ['“What places can I visit?”', 'List destinations'],
@@ -194,3 +202,31 @@ export const KEYS = [
   ['H', 'Open help'],
   ['Esc', 'Stop sound, tour and listening'],
 ];
+
+/**
+ * Best-guess command for something we couldn't parse, so the narrator can say "Did you mean …?".
+ * Looser than parse(): looks for a place or data story hiding in the words.
+ */
+export function suggest(input) {
+  const t = normalize(input);
+  if (!t) return null;
+  const ds = findDatasetByName(t);
+  if (ds) return `open ${ds.title.toLowerCase()}`;
+  const words = t.split(' ');
+  let best = null, score = Infinity;
+  for (let len = 1; len <= Math.min(3, words.length); len++) {
+    for (let i = 0; i + len <= words.length; i++) {
+      const chunk = words.slice(i, i + len).join(' ');
+      if (chunk.length < 4) continue;
+      for (const { n, p } of NAMES) {
+        const d = levenshtein(chunk, n) / Math.max(n.length, 4);
+        if (d < score) { score = d; best = p; }
+      }
+    }
+  }
+  if (best && score <= 0.4) return `go to ${best.name.replace(/^the /, '')}`;
+  if (/\b(zoom|closer|far)\b/.test(t)) return 'zoom in';
+  if (/\b(where|what)\b/.test(t)) return 'where am I';
+  if (/\b(sound|music|hear|listen)\b/.test(t)) return 'play';
+  return null;
+}

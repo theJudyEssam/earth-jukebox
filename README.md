@@ -20,6 +20,10 @@ It needs to be served over `http://localhost` or `https://`. Opening `index.html
 
 **Browsers:** voice recognition works in Chrome, Edge and Safari. Firefox has no speech recognition, so the app falls back to the typed command box, which understands the same phrases.
 
+## The intro
+
+On load, a welcome screen offers a one-minute narrated journey. It has six scenes: space, the Pacific, the Amazon, the Congo, Greenland and the whole planet. Each scene adds one instrument to a score that keeps building (drone, surf, forest melody, lightning drums, glassy ice tones), which teaches the sound language before you explore. Every line is spoken, captioned and announced to screen readers, and haptic patterns play along. Skip it at any time with the button, `Esc`, or by saying "skip". Replay it with the panel button or by saying "play the intro". Any navigation command also ends it.
+
 ## Get the NASA media (recommended, once)
 
 ```bash
@@ -90,6 +94,7 @@ src/
   data/datasets.js     ★ the six data stories: media, regions, notes, sound mapping
   audio/analyzer.js    computer vision: frame pixels → coverage, intensity, hue mix, flashes, motion
   audio/sonifiers.js   one sonifier per dataset (features → sound + haptics)
+  ui/intro.js          the narrated opening journey and its score
   ui/data-dialog.js    the accessible pop-up (<dialog>), media loading, live analysis loop
   data/layers.js       ★ DATA LAYER HOOK: the DataLayer interface, demo layers, ImageDataLayer
   data/image-sampler.js equirectangular pixel sampling + colorbar inversion

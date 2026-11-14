@@ -2,7 +2,7 @@
 import { Globe, HOME } from './globe/globe.js';
 import { formatCoords, distanceKm } from './globe/geo.js';
 import { VoiceRecognizer } from './voice/recognizer.js';
-import { parse, HELP, KEYS } from './voice/commands.js';
+import { parse, suggest, HELP, KEYS } from './voice/commands.js';
 import { Narrator, readPref, writePref } from './ui/narrator.js';
 import { AudioEngine } from './audio/engine.js';
 import { Haptics } from './haptics/haptics.js';
@@ -11,6 +11,7 @@ import { PLACES, TOUR, findPlaceById } from './data/places.js';
 import { describePoint } from './data/describe.js';
 import { DATASETS } from './data/datasets.js';
 import { DataDialog } from './ui/data-dialog.js';
+import { Intro } from './ui/intro.js';
 
 const $ = (id) => document.getElementById(id);
 const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)').matches;
@@ -21,12 +22,14 @@ const audio = new AudioEngine({ haptics });
 const voice = new VoiceRecognizer();
 const globe = new Globe($('globe'), { reducedMotion });
 const dialog = new DataDialog({ audio, narrator });
+const intro = new Intro({ globe, audio, narrator, haptics });
 
 const state = {
   layer: LAYERS[0],
   tourIndex: -1,
   lastAnnounced: '',
   suppressSettledUntil: 0,
+  lastBargeIn: 0,
   chips: [],          // datasets offered for the current view
   chipsKey: '',
   chipsAnnounced: '',
@@ -56,11 +59,18 @@ async function init() {
   globe.addEventListener('settled', onSettled);
   globe.addEventListener('pick', (e) => goToPoint(e.detail.lat, e.detail.lon, { fromClick: true }));
   updateLocationCard();
-  const intro = voice.supported
-    ? 'Welcome to Earth Jukebox. Press V or the microphone button and say “take me to the Amazon”, or type a command. Say “help” to hear everything you can do.'
-    : 'Welcome to Earth Jukebox. Voice recognition is not available in this browser, so type commands in the box, for example “go to Greenland”. Chrome, Edge and Safari support voice.';
-  narrator.say(intro, { speak: false });
-  window.earthJukebox = { globe, audio, voice, narrator, haptics, dialog, run }; // handy for debugging and demos
+  intro.addEventListener('start', () => { stopSound(); stopTour(false); if (dialog.isOpen) dialog.close(); });
+  intro.addEventListener('done', (e) => {
+    const skipped = e.detail.skipped;
+    const howTo = voice.supported
+      ? 'Press V or the microphone button and say “take me to the Amazon”, or type a command. Say “help” to hear everything you can do.'
+      : 'Type a command in the box, for example “go to Greenland”. For voice, use Chrome, Edge or Safari.';
+    state.suppressSettledUntil = performance.now() + 2500;
+    narrator.say(skipped ? `Welcome to Earth Jukebox. ${howTo}` : `Now it's your turn. ${howTo}`, { speak: !skipped });
+    (voice.supported ? $('mic') : $('command-input')).focus();
+  });
+  intro.offer();
+  window.earthJukebox = { globe, audio, voice, narrator, haptics, dialog, intro, run }; // handy for debugging and demos
 }
 
 // ---------------------------------------------------------------- command handling
@@ -73,8 +83,16 @@ function run(alternatives, { source = 'typed' } = {}) {
   audio.ensure();
   if (!cmd) {
     audio.earcon('error');
-    // In continuous voice mode, background chatter shouldn't trigger a spoken complaint every time.
-    narrator.say(`I didn't catch a command in “${heard}”. Say “help” for ideas.`, { speak: source === 'typed', kind: 'error' });
+    // Point the user to a likely command, and always to "help". In continuous voice mode, background
+    // chatter shouldn't trigger a spoken reply every time, so speak at most once every 15 seconds.
+    const guess = suggest(heard);
+    const text = guess
+      ? `Sorry, I didn't understand “${heard}”. Did you mean “${guess}”? Or say “help” to hear all the voice commands.`
+      : `Sorry, I didn't understand “${heard}”. Say “help” to hear all the voice commands you can use.`;
+    const now = performance.now();
+    const speakIt = source === 'typed' || now - (state.lastMissSpoken || 0) > 15000;
+    if (speakIt) state.lastMissSpoken = now;
+    narrator.say(text, { speak: speakIt, kind: 'error' });
     return false;
   }
   audio.earcon('ok');
@@ -85,11 +103,14 @@ function run(alternatives, { source = 'typed' } = {}) {
 function execute(cmd) {
   if (dialog.isOpen) {
     if (cmd.type === 'play') return dialog.play();
-    if (cmd.type === 'stop') { dialog.pause(); return narrator.say('Paused.', { speak: false }); }
+    if (cmd.type === 'stop') { narrator.stopSpeaking(); dialog.pause(); return narrator.say('Paused.', { speak: false }); }
     if (cmd.type === 'describe' || cmd.type === 'describe-layer') return dialog.describe();
     if (['goto', 'goto-coords', 'reset', 'tour-start', 'tour-next', 'tour-prev', 'nudge', 'zoom'].includes(cmd.type)) dialog.close();
   }
+  if (intro.running && !['skip-intro', 'speech', 'volume', 'voice-off', 'help'].includes(cmd.type)) intro.skip();
   switch (cmd.type) {
+    case 'intro': return intro.start();
+    case 'skip-intro': return intro.running ? intro.skip() : narrator.say('The intro is not playing.', { speak: false });
     case 'open-data': {
       const ds = cmd.dataset || state.chips[cmd.index];
       if (!ds) return narrator.say(cmd.index != null ? `There is no option ${cmd.index + 1} here. ${chipsSentence()}` : 'I could not find that data story.');
@@ -124,7 +145,7 @@ function execute(cmd) {
       return narrator.say(`You can visit ${names.slice(0, -1).join(', ')}, and ${names.at(-1)}, plus cities like New York, Cairo, Mumbai and Tokyo. You can also say coordinates, like “go to 40 north 74 west”.`);
     }
     case 'play': return startSound();
-    case 'stop': stopSound(); stopTour(false); return;
+    case 'stop': narrator.stopSpeaking(); stopSound(); stopTour(false); return;
     case 'volume': {
       audio.setVolume(audio.volume + cmd.delta);
       $('volume').value = Math.round(audio.volume * 100);
@@ -190,7 +211,7 @@ function announceHere({ brief, prefix = '' }) {
 function onSettled() {
   updateLocationCard();
   updateChips();
-  if (performance.now() < state.suppressSettledUntil) return;
+  if (intro.running || performance.now() < state.suppressSettledUntil) return;
   if (state.chipsKey !== state.chipsAnnounced && !dialog.isOpen) {
     state.chipsAnnounced = state.chipsKey;
     const v0 = globe.getView(), d0 = describePoint(v0.lat, v0.lon);
@@ -274,12 +295,25 @@ function bindVoice() {
     mic.setAttribute('aria-pressed', String(on));
     $('mic-label').textContent = on ? 'Listening… (press to stop)' : 'Start voice control';
   });
-  voice.addEventListener('interim', (e) => { $('interim').textContent = e.detail.text; });
-  voice.addEventListener('final', (e) => run(e.detail.alternatives, { source: 'voice' }));
+  // Barge-in: the mic stays on while the narrator talks, so "stop" works at any moment.
+  // While it is talking we only act on a short stop phrase; anything else is probably the
+  // speakers' own echo, so it is ignored.
+  voice.addEventListener('interim', (e) => {
+    $('interim').textContent = e.detail.text;
+    if (narrator.speaking && isStopPhrase(e.detail.text)) bargeIn();
+  });
+  voice.addEventListener('final', (e) => {
+    const alts = e.detail.alternatives;
+    const stopWord = alts.some(isStopPhrase);
+    if (narrator.speaking) { if (stopWord) bargeIn(); return; }
+    if (stopWord && performance.now() - state.lastBargeIn < 2500) return; // already handled from the interim result
+    if (!stopWord && isEcho(alts[0])) return; // the tail of our own voice, recognised just after it stopped
+    run(alts, { source: 'voice' });
+  });
   voice.addEventListener('error', (e) => { audio.earcon('error'); narrator.say(e.detail.message, { kind: 'error', urgent: true }); });
   // Don't let the microphone hear our own voice.
-  narrator.onSpeakStart = () => voice.pause();
-  narrator.onSpeakEnd = () => voice.resume();
+  narrator.onSpeakStart = () => {};
+  narrator.onSpeakEnd = () => {};
 }
 
 function toggleVoice() {
@@ -306,6 +340,22 @@ function bindUi() {
   const speak = $('opt-speak');
   speak.checked = narrator.speakAloud;
   speak.addEventListener('change', () => setSpeak(speak.checked));
+  // Voice chooser: best natural voices first; remembers the choice.
+  const voiceSel = $('opt-voice');
+  const fillVoices = (voices) => {
+    voiceSel.innerHTML = '<option value="">Best available</option>' + voices.map((v) => `<option value="${v.name.replace(/"/g, '&quot;')}">${v.name.replace(/</g, '&lt;')}</option>`).join('');
+    voiceSel.value = voices.some((v) => v.name === narrator.voiceName) ? narrator.voiceName : '';
+    const best = voices[0];
+    const robotic = !best || !/natural|neural|google|premium|enhanced/i.test(best.name);
+    $('voice-hint').hidden = !robotic;
+    $('voice-hint').textContent = 'This browser only has basic voices. For a much more natural voice, open the app in Microsoft Edge (its “Natural” voices) or Chrome.';
+  };
+  narrator.onVoices = fillVoices;
+  fillVoices(narrator.voices);
+  voiceSel.addEventListener('change', () => narrator.setVoice(voiceSel.value));
+  $('opt-rate').value = narrator.rate;
+  $('opt-rate').addEventListener('change', (e) => narrator.setRate(+e.target.value));
+  $('voice-test').addEventListener('click', () => narrator.say(`Hello. This is ${narrator.voice?.name || 'your browser voice'}. Welcome to Earth Jukebox.`, { speak: true }));
   $('opt-clouds').addEventListener('change', (e) => globe.setClouds(e.target.checked));
   const spin = $('opt-spin');
   spin.checked = readPref('spin', false) && !reducedMotion;
@@ -339,6 +389,7 @@ function bindKeys() {
   document.addEventListener('keydown', (e) => {
     const t = e.target;
     const typing = t.closest?.('input[type=text], textarea, select');
+    if (e.key === 'Escape' && intro.running) { e.preventDefault(); intro.skip(); return; }
     if (e.key === 'Escape') {
       stopSound(); stopTour(false); narrator.stopSpeaking();
       if (voice.active) toggleVoice();
@@ -426,6 +477,29 @@ function updateMarkerLabel() {
   el.textContent = globe.markerLabel;
   el.style.left = `${p.x}px`;
   el.style.top = `${p.y}px`;
+}
+
+// ---------------------------------------------------------------- barge-in
+const STOP_RE = /^(ok(ay)? )?(stop|stop it|stop talking|stop that|stop please|please stop|be quiet|quiet|shush|hush|shut up|enough|that's enough|pause|silence|cancel|skip|skip it|no stop)$/;
+function isStopPhrase(text) { return STOP_RE.test(text.toLowerCase().replace(/[^a-z' ]/g, ' ').replace(/\s+/g, ' ').trim()); }
+
+function isEcho(heard) {
+  if (performance.now() - (narrator.lastSpeakEnd || 0) > 2000 || !narrator.lastSpokenText) return false;
+  const said = new Set(narrator.lastSpokenText.toLowerCase().match(/[a-z']+/g));
+  const words = heard.toLowerCase().match(/[a-z']+/g) || [];
+  return words.length > 0 && words.filter((w) => said.has(w)).length / words.length >= 0.6;
+}
+
+/** The user said stop while something was playing or talking: silence everything right away. */
+function bargeIn() {
+  state.lastBargeIn = performance.now();
+  narrator.stopSpeaking();
+  $('interim').textContent = '';
+  if (intro.running) intro.skip();
+  stopSound(); stopTour(false);
+  if (dialog.isOpen && dialog.playing) dialog.pause();
+  audio.earcon('unlisten');
+  narrator.say('Stopped.', { speak: false });
 }
 
 // ---------------------------------------------------------------- data options

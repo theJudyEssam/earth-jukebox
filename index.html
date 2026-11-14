@@ -22,6 +22,25 @@
   <div id="live" class="visually-hidden" role="status" aria-live="polite" aria-atomic="true"></div>
   <div id="live-assertive" class="visually-hidden" role="alert" aria-live="assertive" aria-atomic="true"></div>
 
+  <dialog id="intro-welcome" class="intro-welcome" aria-labelledby="intro-welcome-title" aria-describedby="intro-welcome-sub">
+    <div class="iw-inner">
+      <p class="iw-kicker">NASA Space Apps · Earth Information Jukebox</p>
+      <h2 id="intro-welcome-title">Listen to the planet</h2>
+      <p id="intro-welcome-sub">A one-minute journey around Earth, with sound. Turn your volume up, or use headphones for the full stereo field.</p>
+      <div class="iw-actions">
+        <button id="intro-begin" type="button" class="iw-begin">▶ Begin the journey</button>
+        <button id="intro-skip-start" type="button" class="iw-skip">Go straight to the globe</button>
+      </div>
+      <p class="hint">During the intro, press <kbd>Esc</kbd> or say “skip” to jump in.</p>
+    </div>
+  </dialog>
+
+  <div id="intro-bar" class="intro-bar" hidden>
+    <span id="intro-step" class="intro-step">Part 1</span>
+    <div class="intro-track" aria-hidden="true"><div id="intro-progress" class="intro-progress"></div></div>
+    <button id="intro-skip" type="button">Skip intro <kbd>Esc</kbd></button>
+  </div>
+
   <main class="app">
     <section id="globe" class="globe" tabindex="0" role="application"
              aria-roledescription="interactive globe"
@@ -90,9 +109,21 @@
         <button id="hap-connect" type="button" hidden>Connect haptic device</button>
       </section>
 
+      <button id="intro-again" type="button" class="intro-again">▶ Replay the intro</button>
+
       <section class="settings" aria-labelledby="set-h">
         <h2 id="set-h">Settings</h2>
         <label class="check"><input id="opt-speak" type="checkbox" checked> Spoken responses <span class="hint">(turn off if you use a screen reader)</span></label>
+        <div class="row voice-row">
+          <label for="opt-voice" class="inline">Voice</label>
+          <select id="opt-voice"><option value="">Best available</option></select>
+          <button id="voice-test" type="button">Test</button>
+        </div>
+        <div class="row">
+          <label for="opt-rate" class="inline">Speed</label>
+          <input id="opt-rate" type="range" min="0.75" max="1.3" step="0.05" value="0.95">
+        </div>
+        <p id="voice-hint" class="hint" hidden></p>
         <label class="check"><input id="opt-clouds" type="checkbox" checked> Clouds</label>
         <label class="check"><input id="opt-spin" type="checkbox"> Slow spin</label>
       </section>
